@@ -8,55 +8,39 @@ app.use(cors());
 app.use(express.json());
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY
 });
 
-// 🔥 TEST
-app.get("/", (req, res) => {
-  res.send("IA DARKNESS activa 🚀");
-});
-
-// =================
-// 💬 CHAT
-// =================
+// 🧠 CHAT
 app.post("/text", async (req, res) => {
   try {
-    const { message } = req.body;
+    const { prompt } = req.body;
 
-    if (!message) {
-      return res.status(400).json({ error: "Falta mensaje" });
+    if (!prompt) {
+      return res.status(400).json({ error: "Falta prompt" });
     }
 
-    const response = await openai.chat.completions.create({
+    const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        {
-          role: "system",
-          content: "Eres IA DARKNESS, una IA inteligente, clara y útil."
-        },
-        {
-          role: "user",
-          content: message
-        }
-      ],
+        { role: "system", content: "Eres una IA llamada IA DARKNESS, responde de forma clara, útil y profesional." },
+        { role: "user", content: prompt }
+      ]
     });
 
     res.json({
-      reply: response.choices[0].message.content
+      respuesta: completion.choices[0].message.content
     });
 
   } catch (error) {
-    console.log(error);
     res.status(500).json({
-      error: "Error en chat",
+      error: "Error en IA",
       detalle: error.message
     });
   }
 });
 
-// =================
 // 🎨 IMÁGENES
-// =================
 app.post("/image", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -68,7 +52,7 @@ app.post("/image", async (req, res) => {
     const result = await openai.images.generate({
       model: "gpt-image-1",
       prompt: prompt,
-      size: "512x512"
+      size: "1024x1024"
     });
 
     const imageBase64 = result.data[0].b64_json;
@@ -78,12 +62,16 @@ app.post("/image", async (req, res) => {
     });
 
   } catch (error) {
-    console.log(error);
     res.status(500).json({
       error: "Error generando imagen",
       detalle: error.message
     });
   }
+});
+
+// 🟢 TEST
+app.get("/test", (req, res) => {
+  res.send("IA DARKNESS funcionando 🚀");
 });
 
 const PORT = process.env.PORT || 3000;
