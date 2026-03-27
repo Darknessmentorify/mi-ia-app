@@ -1,11 +1,15 @@
 import express from "express";
 import cors from "cors";
 import OpenAI from "openai";
+import multer from "multer";
+import fs from "fs";
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+const upload = multer({ dest: "uploads/" });
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -26,7 +30,7 @@ app.post("/text", async (req, res) => {
       messages: [
         {
           role: "system",
-          content: "Eres IA DARKNESS, responde claro, útil y natural como ChatGPT."
+          content: "Eres IA DARKNESS, respondes claro, útil y directo."
         },
         {
           role: "user",
@@ -40,24 +44,16 @@ app.post("/text", async (req, res) => {
     });
 
   } catch (error) {
-    console.log("ERROR CHAT:", error);
-
-    res.status(500).json({
-      error: "Error en IA",
-      detalle: error.message
-    });
+    console.log(error);
+    res.status(500).json({ error: "Error en chat" });
   }
 });
 
 
-// 🎨 IMÁGENES
+// 🎨 GENERAR IMAGEN
 app.post("/image", async (req, res) => {
   try {
     const { prompt } = req.body;
-
-    if (!prompt) {
-      return res.status(400).json({ error: "Falta prompt" });
-    }
 
     const result = await openai.images.generate({
       model: "gpt-image-1",
@@ -65,27 +61,47 @@ app.post("/image", async (req, res) => {
       size: "1024x1024"
     });
 
-    if (!result.data || !result.data[0]) {
-      return res.status(500).json({ error: "No se generó imagen" });
-    }
-
     const imageBase64 = result.data[0].b64_json;
-
-    if (!imageBase64) {
-      return res.status(500).json({ error: "Imagen vacía" });
-    }
 
     res.json({
       image: `data:image/png;base64,${imageBase64}`
     });
 
   } catch (error) {
-    console.log("ERROR IMAGEN:", error);
+    console.log(error);
+    res.status(500).json({ error: "Error generando imagen" });
+  }
+});
 
-    res.status(500).json({
-      error: "Error generando imagen",
-      detalle: error.message
+
+// 🖼️ EDITAR IMAGEN
+app.post("/edit-image", upload.single("image"), async (req, res) => {
+  try {
+    const prompt = req.body.prompt;
+    const file = req.file;
+
+    if (!file || !prompt) {
+      return res.status(400).json({ error: "Falta imagen o prompt" });
+    }
+
+    const result = await openai.images.edits({
+      model: "gpt-image-1",
+      image: fs.createReadStream(file.path),
+      prompt: prompt,
+      size: "1024x1024"
     });
+
+    const imageBase64 = result.data[0].b64_json;
+
+    res.json({
+      image: `data:image/png;base64,${imageBase64}`
+    });
+
+    fs.unlinkSync(file.path);
+
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: "Error editando imagen" });
   }
 });
 
