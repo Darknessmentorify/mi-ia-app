@@ -7,85 +7,73 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔑 OpenAI
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY
 });
 
-// 🧠 MEMORIA
-let conversaciones = {};
-
-// 💬 CHAT
+// 🧠 CHAT
 app.post("/text", async (req, res) => {
   try {
-    const { prompt, userId } = req.body;
+    const { prompt } = req.body;
 
     if (!prompt) {
       return res.status(400).json({ error: "Falta prompt" });
     }
 
-    // Crear memoria si no existe
-    if (!conversaciones[userId]) {
-      conversaciones[userId] = [
-        {
-          role: "system",
-          content: "Eres IA DARKNESS, un asistente inteligente, fluido y profesional como ChatGPT."
-        }
-      ];
-    }
-
-    // guardar mensaje usuario
-    conversaciones[userId].push({
-      role: "user",
-      content: prompt
-    });
-
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: conversaciones[userId],
+      messages: [
+        { role: "system", content: "Eres una IA llamada IA DARKNESS, responde de forma clara, útil y profesional." },
+        { role: "user", content: prompt }
+      ]
     });
 
-    const respuesta = completion.choices[0].message.content;
-
-    // guardar respuesta IA
-    conversaciones[userId].push({
-      role: "assistant",
-      content: respuesta
+    res.json({
+      respuesta: completion.choices[0].message.content
     });
-
-    res.json({ respuesta });
 
   } catch (error) {
     res.status(500).json({
-      error: "Error con OpenAI",
+      error: "Error en IA",
       detalle: error.message
     });
   }
 });
 
-// 🏠 ROOT
-app.get("/", (req, res) => {
-  res.send("IA DARKNESS activa 🚀");
-});
-
-// 🧪 TEST
-app.get("/test", async (req, res) => {
+// 🎨 IMÁGENES
+app.post("/image", async (req, res) => {
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "user", content: "Hola" }
-      ],
+    const { prompt } = req.body;
+
+    if (!prompt) {
+      return res.status(400).json({ error: "Falta prompt" });
+    }
+
+    const result = await openai.images.generate({
+      model: "gpt-image-1",
+      prompt: prompt,
+      size: "1024x1024"
     });
 
-    res.send(completion.choices[0].message.content);
+    const imageBase64 = result.data[0].b64_json;
+
+    res.json({
+      image: `data:image/png;base64,${imageBase64}`
+    });
 
   } catch (error) {
-    res.send("Error: " + error.message);
+    res.status(500).json({
+      error: "Error generando imagen",
+      detalle: error.message
+    });
   }
 });
 
-// 🚀 PORT
+// 🟢 TEST
+app.get("/test", (req, res) => {
+  res.send("IA DARKNESS funcionando 🚀");
+});
+
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
