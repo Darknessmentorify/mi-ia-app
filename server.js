@@ -4,23 +4,21 @@ import OpenAI from "openai";
 
 const app = express();
 
-// 🔥 CONFIG
 app.use(cors());
 app.use(express.json());
 
-// 🔑 API KEY (Railway)
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// 🟢 TEST
+// 🔥 TEST
 app.get("/", (req, res) => {
   res.send("IA DARKNESS activa 🚀");
 });
 
-// =========================
+// =================
 // 💬 CHAT
-// =========================
+// =================
 app.post("/text", async (req, res) => {
   try {
     const { message } = req.body;
@@ -48,18 +46,17 @@ app.post("/text", async (req, res) => {
     });
 
   } catch (error) {
-    console.log("ERROR CHAT:", error);
-
+    console.log(error);
     res.status(500).json({
-      error: "Error en el chat",
+      error: "Error en chat",
       detalle: error.message
     });
   }
 });
 
-// =========================
+// =================
 // 🎨 IMÁGENES
-// =========================
+// =================
 app.post("/image", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -74,12 +71,6 @@ app.post("/image", async (req, res) => {
       size: "512x512"
     });
 
-    if (!result.data || !result.data[0].b64_json) {
-      return res.status(500).json({
-        error: "No se generó la imagen"
-      });
-    }
-
     const imageBase64 = result.data[0].b64_json;
 
     res.json({
@@ -87,8 +78,7 @@ app.post("/image", async (req, res) => {
     });
 
   } catch (error) {
-    console.log("ERROR IMAGEN:", error);
-
+    console.log(error);
     res.status(500).json({
       error: "Error generando imagen",
       detalle: error.message
@@ -96,9 +86,6 @@ app.post("/image", async (req, res) => {
   }
 });
 
-// =========================
-// 🚀 START SERVER
-// =========================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
