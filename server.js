@@ -155,7 +155,7 @@ app.post("/image", auth, async (req, res) => {
   const result = await openai.images.generate({
     model: "gpt-image-1",
     prompt: req.body.prompt,
-    size: "1024x1024"
+    size: "512x512"
   });
 
   res.json({
