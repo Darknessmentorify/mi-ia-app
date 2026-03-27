@@ -11,6 +11,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+
 // 🧠 CHAT
 app.post("/text", async (req, res) => {
   try {
@@ -23,8 +24,14 @@ app.post("/text", async (req, res) => {
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        { role: "system", content: "Eres una IA llamada IA DARKNESS, responde de forma clara, útil y profesional." },
-        { role: "user", content: prompt }
+        {
+          role: "system",
+          content: "Eres IA DARKNESS, responde claro, útil y natural como ChatGPT."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
       ]
     });
 
@@ -33,12 +40,15 @@ app.post("/text", async (req, res) => {
     });
 
   } catch (error) {
+    console.log("ERROR CHAT:", error);
+
     res.status(500).json({
       error: "Error en IA",
       detalle: error.message
     });
   }
 });
+
 
 // 🎨 IMÁGENES
 app.post("/image", async (req, res) => {
@@ -55,13 +65,23 @@ app.post("/image", async (req, res) => {
       size: "1024x1024"
     });
 
+    if (!result.data || !result.data[0]) {
+      return res.status(500).json({ error: "No se generó imagen" });
+    }
+
     const imageBase64 = result.data[0].b64_json;
+
+    if (!imageBase64) {
+      return res.status(500).json({ error: "Imagen vacía" });
+    }
 
     res.json({
       image: `data:image/png;base64,${imageBase64}`
     });
 
   } catch (error) {
+    console.log("ERROR IMAGEN:", error);
+
     res.status(500).json({
       error: "Error generando imagen",
       detalle: error.message
@@ -69,10 +89,12 @@ app.post("/image", async (req, res) => {
   }
 });
 
+
 // 🟢 TEST
 app.get("/test", (req, res) => {
   res.send("IA DARKNESS funcionando 🚀");
 });
+
 
 const PORT = process.env.PORT || 3000;
 
