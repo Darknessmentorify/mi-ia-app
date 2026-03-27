@@ -4,26 +4,22 @@ import OpenAI from "openai";
 
 const app = express();
 
-// 🔥 IMPORTANTE: permitir conexiones desde cualquier web
-app.use(cors({
-  origin: "*"
-}));
-
+app.use(cors());
 app.use(express.json());
 
-// 🔑 OpenAI config (usa variable de Railway)
+// 🔑 OpenAI
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// 🧠 Ruta principal de IA
+// 🔹 Ruta principal (chat)
 app.post("/text", async (req, res) => {
   try {
     const prompt = req.body.prompt;
 
     if (!prompt) {
       return res.status(400).json({
-        error: "Falta el prompt"
+        error: "Falta el prompt",
       });
     }
 
@@ -39,8 +35,6 @@ app.post("/text", async (req, res) => {
     });
 
   } catch (error) {
-    console.error("❌ ERROR:", error);
-
     res.status(500).json({
       error: "Error con OpenAI",
       detalle: error.message,
@@ -48,12 +42,29 @@ app.post("/text", async (req, res) => {
   }
 });
 
-// 🟢 Ruta de prueba
+// 🔹 Ruta raíz
 app.get("/", (req, res) => {
   res.send("IA DARKNESS activa 🚀");
 });
 
-// 🔥 Puerto (Railway usa esto)
+// 🔹 🔥 ESTA ES LA QUE TE FALTA
+app.get("/test", async (req, res) => {
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "user", content: "Hola" }
+      ],
+    });
+
+    res.send(completion.choices[0].message.content);
+
+  } catch (error) {
+    res.send("Error: " + error.message);
+  }
+});
+
+// 🔹 Puerto
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
