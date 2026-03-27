@@ -7,67 +7,74 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔑 Configurar OpenAI
+// 🔑 OpenAI
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// 💬 CHAT PRINCIPAL
+// 🧠 MEMORIA
+let conversaciones = {};
+
+// 💬 CHAT
 app.post("/text", async (req, res) => {
   try {
-    const prompt = req.body.prompt;
+    const { prompt, userId } = req.body;
 
     if (!prompt) {
-      return res.status(400).json({
-        error: "Falta el prompt",
-      });
+      return res.status(400).json({ error: "Falta prompt" });
     }
+
+    // Crear memoria si no existe
+    if (!conversaciones[userId]) {
+      conversaciones[userId] = [
+        {
+          role: "system",
+          content: "Eres IA DARKNESS, un asistente inteligente, fluido y profesional como ChatGPT."
+        }
+      ];
+    }
+
+    // guardar mensaje usuario
+    conversaciones[userId].push({
+      role: "user",
+      content: prompt
+    });
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: "Eres IA DARKNESS, un asistente avanzado como ChatGPT. Respondes con claridad, inteligencia y fluidez. Explicas bien, ayudas paso a paso y adaptas tu respuesta al nivel del usuario. Siempre eres útil, directo y profesional."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
+      messages: conversaciones[userId],
     });
 
-    res.json({
-      respuesta: completion.choices[0].message.content,
+    const respuesta = completion.choices[0].message.content;
+
+    // guardar respuesta IA
+    conversaciones[userId].push({
+      role: "assistant",
+      content: respuesta
     });
+
+    res.json({ respuesta });
 
   } catch (error) {
     res.status(500).json({
       error: "Error con OpenAI",
-      detalle: error.message,
+      detalle: error.message
     });
   }
 });
 
-// 🏠 Ruta raíz
+// 🏠 ROOT
 app.get("/", (req, res) => {
   res.send("IA DARKNESS activa 🚀");
 });
 
-// 🧪 Ruta de prueba
+// 🧪 TEST
 app.get("/test", async (req, res) => {
   try {
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        {
-          role: "system",
-          content: "Eres IA DARKNESS, un asistente inteligente y amable."
-        },
-        {
-          role: "user",
-          content: "Hola"
-        }
+        { role: "user", content: "Hola" }
       ],
     });
 
@@ -78,7 +85,7 @@ app.get("/test", async (req, res) => {
   }
 });
 
-// 🚀 PUERTO
+// 🚀 PORT
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
