@@ -9,7 +9,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// crear carpeta uploads si no existe
+// crear carpeta uploads
 if (!fs.existsSync("uploads")) {
   fs.mkdirSync("uploads");
 }
@@ -21,14 +21,14 @@ const openai = new OpenAI({
 });
 
 // =======================
-// 🧠 CHAT
+// 🧠 CHAT CON MEMORIA
 // =======================
 app.post("/text", async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const { messages } = req.body;
 
-    if (!prompt) {
-      return res.status(400).json({ error: "Falta prompt" });
+    if (!messages) {
+      return res.status(400).json({ error: "Faltan mensajes" });
     }
 
     const completion = await openai.chat.completions.create({
@@ -36,12 +36,9 @@ app.post("/text", async (req, res) => {
       messages: [
         {
           role: "system",
-          content: "Eres IA DARKNESS, respondes claro, útil y directo."
+          content: "Eres IA DARKNESS, recuerdas todo lo que el usuario dice."
         },
-        {
-          role: "user",
-          content: prompt
-        }
+        ...messages
       ]
     });
 
@@ -56,7 +53,7 @@ app.post("/text", async (req, res) => {
 });
 
 // =======================
-// 🎨 GENERAR IMAGEN
+// 🎨 IMAGEN
 // =======================
 app.post("/image", async (req, res) => {
   try {
@@ -64,8 +61,8 @@ app.post("/image", async (req, res) => {
 
     const result = await openai.images.generate({
       model: "gpt-image-1",
-      prompt: prompt,
-      size: "1024x1024"
+      prompt,
+      size: "512x512"
     });
 
     res.json({
@@ -79,20 +76,15 @@ app.post("/image", async (req, res) => {
 });
 
 // =======================
-// 🖼️ EDITAR IMAGEN (SIMULADO)
+// 🖼️ EDITAR
 // =======================
 app.post("/edit-image", upload.single("image"), async (req, res) => {
   try {
     const prompt = req.body.prompt;
 
-    if (!prompt) {
-      return res.status(400).json({ error: "Falta prompt" });
-    }
-
-    // usamos generate porque edits falla en Railway
     const result = await openai.images.generate({
       model: "gpt-image-1",
-      prompt: prompt,
+      prompt,
       size: "512x512"
     });
 
@@ -100,8 +92,23 @@ app.post("/edit-image", upload.single("image"), async (req, res) => {
       image: `data:image/png;base64,${result.data[0].b64_json}`
     });
 
-    // borrar archivo si existe
     if (req.file) fs.unlinkSync(req.file.path);
+
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ error: "Error editando imagen" });
+  }
+});
+
+app.get("/test", (req, res) => {
+  res.send("IA DARKNESS funcionando 🚀");
+});
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log("Servidor corriendo en puerto " + PORT);
+});    if (req.file) fs.unlinkSync(req.file.path);
 
   } catch (error) {
     console.log(error);
