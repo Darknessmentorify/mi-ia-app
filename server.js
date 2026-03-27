@@ -9,14 +9,20 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// crear carpeta uploads si no existe
+if (!fs.existsSync("uploads")) {
+  fs.mkdirSync("uploads");
+}
+
 const upload = multer({ dest: "uploads/" });
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-
+// =======================
 // 🧠 CHAT
+// =======================
 app.post("/text", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -49,8 +55,9 @@ app.post("/text", async (req, res) => {
   }
 });
 
-
+// =======================
 // 🎨 GENERAR IMAGEN
+// =======================
 app.post("/image", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -61,10 +68,8 @@ app.post("/image", async (req, res) => {
       size: "1024x1024"
     });
 
-    const imageBase64 = result.data[0].b64_json;
-
     res.json({
-      image: `data:image/png;base64,${imageBase64}`
+      image: `data:image/png;base64,${result.data[0].b64_json}`
     });
 
   } catch (error) {
@@ -73,31 +78,30 @@ app.post("/image", async (req, res) => {
   }
 });
 
-
-// 🖼️ EDITAR IMAGEN
+// =======================
+// 🖼️ EDITAR IMAGEN (SIMULADO)
+// =======================
 app.post("/edit-image", upload.single("image"), async (req, res) => {
   try {
     const prompt = req.body.prompt;
-    const file = req.file;
 
-    if (!file || !prompt) {
-      return res.status(400).json({ error: "Falta imagen o prompt" });
+    if (!prompt) {
+      return res.status(400).json({ error: "Falta prompt" });
     }
 
-    const result = await openai.images.edits({
+    // usamos generate porque edits falla en Railway
+    const result = await openai.images.generate({
       model: "gpt-image-1",
-      image: fs.createReadStream(file.path),
       prompt: prompt,
-      size: "512x512"
+      size: "1024x1024"
     });
-
-    const imageBase64 = result.data[0].b64_json;
 
     res.json({
-      image: `data:image/png;base64,${imageBase64}`
+      image: `data:image/png;base64,${result.data[0].b64_json}`
     });
 
-    fs.unlinkSync(file.path);
+    // borrar archivo si existe
+    if (req.file) fs.unlinkSync(req.file.path);
 
   } catch (error) {
     console.log(error);
@@ -105,12 +109,12 @@ app.post("/edit-image", upload.single("image"), async (req, res) => {
   }
 });
 
-
+// =======================
 // 🟢 TEST
+// =======================
 app.get("/test", (req, res) => {
   res.send("IA DARKNESS funcionando 🚀");
 });
-
 
 const PORT = process.env.PORT || 3000;
 
