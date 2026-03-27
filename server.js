@@ -43,7 +43,23 @@ app.post("/texto", async (req, res) => {
 app.get("/", (req, res) => {
   res.send("Servidor IA activo 🚀");
 });
+app.get("/test", async (req, res) => {
+  const prompt = req.query.q || "Hola";
 
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "user", content: prompt }
+      ]
+    });
+
+    res.send(completion.choices[0].message.content);
+
+  } catch (error) {
+    res.send("Error: " + error.message);
+  }
+});
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
