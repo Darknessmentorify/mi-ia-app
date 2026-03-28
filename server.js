@@ -10,27 +10,24 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// =======================
-// 📁 UPLOADS
-// =======================
+// carpeta uploads
 if (!fs.existsSync("uploads")) {
   fs.mkdirSync("uploads");
 }
 
 const upload = multer({ dest: "uploads/" });
 
-// =======================
-// 🔐 API KEYS (SEGURAS)
-// =======================
+// API OpenAI
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+// TOKEN TELEGRAM (desde Railway)
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const TELEGRAM_URL = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 
 // =======================
-// 🧠 CHAT WEB (CON MEMORIA)
+// 🧠 CHAT WEB
 // =======================
 app.post("/text", async (req, res) => {
   try {
@@ -39,109 +36,35 @@ app.post("/text", async (req, res) => {
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        { role: "system", content: "Eres IA DARKNESS, respondes claro y recuerdas todo." },
+        { role: "system", content: "Eres IA DARKNESS" },
         ...(messages || [])
       ]
     });
 
-    const respuesta =
-      completion.choices?.[0]?.message?.content || "Sin respuesta";
-
-    res.json({ respuesta });
-
-  } catch (error) {
-    console.log(error);
-    res.json({ respuesta: "Error en IA 💀" });
-  }
-});
-
-// =======================
-// 🎨 GENERAR IMAGEN
-// =======================
-app.post("/image", async (req, res) => {
-  try {
-    const { prompt } = req.body;
-
-    const result = await openai.images.generate({
-      model: "gpt-image-1",
-      prompt,
-      size: "512x512"
-    });
-
     res.json({
-      image: `data:image/png;base64,${result.data[0].b64_json}`
+      respuesta: completion.choices[0].message.content
     });
 
   } catch (error) {
     console.log(error);
-    res.status(500).json({ error: "Error generando imagen" });
+    res.json({ respuesta: "Error 💀" });
   }
 });
 
 // =======================
-// 🖼️ EDITAR IMAGEN
-// =======================
-app.post("/edit-image", upload.single("image"), async (req, res) => {
-  try {
-    const prompt = req.body.prompt;
-
-    const result = await openai.images.generate({
-      model: "gpt-image-1",
-      prompt,
-      size: "512x512"
-    });
-
-    res.json({
-      image: `data:image/png;base64,${result.data[0].b64_json}`
-    });
-
-    if (req.file) fs.unlinkSync(req.file.path);
-
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({ error: "Error editando imagen" });
-  }
-});
-
-// =======================
-// 🤖 TELEGRAM BOT
+// 🤖 TELEGRAM
 // =======================
 app.post("/telegram", async (req, res) => {
+
+  const message = req.body.message;
+
+  if (!message) return res.sendStatus(200);
+
+  const chatId = message.chat.id;
+  const text = message.text;
+
   try {
-    const message = req.body.message;
 
-    if (!message) return res.sendStatus(200);
-
-    const chatId = message.chat.id;
-    const text = message.text;
-
-    // 🔹 comando imagen
-    if (text && text.startsWith("/imagen")) {
-      const prompt = text.replace("/imagen", "").trim();
-
-      const result = await openai.images.generate({
-        model: "gpt-image-1",
-        prompt,
-        size: "512x512"
-      });
-
-      const image = result.data[0].b64_json;
-
-      await fetch(`${TELEGRAM_URL}/sendPhoto`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          chat_id: chatId,
-          photo: `data:image/png;base64,${image}`
-        })
-      });
-
-      return res.sendStatus(200);
-    }
-
-    // 🔹 chat normal
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -150,8 +73,7 @@ app.post("/telegram", async (req, res) => {
       ]
     });
 
-    const respuesta =
-      completion.choices?.[0]?.message?.content || "Sin respuesta";
+    const respuesta = completion.choices[0].message.content;
 
     await fetch(`${TELEGRAM_URL}/sendMessage`, {
       method: "POST",
@@ -164,24 +86,20 @@ app.post("/telegram", async (req, res) => {
       })
     });
 
-    res.sendStatus(200);
-
   } catch (error) {
     console.log(error);
-    res.sendStatus(200);
   }
+
+  res.sendStatus(200);
 });
 
-// =======================
-// 🟢 TEST
 // =======================
 app.get("/test", (req, res) => {
   res.send("IA DARKNESS funcionando 🚀");
 });
 
-// =======================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log("Servidor corriendo en puerto " + PORT);
+  console.log("Servidor corriendo");
 });
