@@ -13,14 +13,10 @@ const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const TELEGRAM_URL = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 
 // =======================
-// TEST
-// =======================
 app.get("/", (req, res) => {
   res.send("IA DARKNESS funcionando 🚀");
 });
 
-// =======================
-// TELEGRAM BOT
 // =======================
 app.post("/telegram", async (req, res) => {
 
@@ -28,16 +24,18 @@ app.post("/telegram", async (req, res) => {
   if (!message) return res.sendStatus(200);
 
   const chatId = message.chat.id;
-  const text = message.text;
+  const text = message.text || "";
+
+  console.log("MENSAJE:", text);
 
   try {
 
-    // =======================
-    // 🖼️ SI PIDE IMAGEN
-    // =======================
-    if (text.toLowerCase().startsWith("imagen:")) {
+    // 🔥 DETECCIÓN MEJORADA
+    if (text.toLowerCase().includes("imagen")) {
 
-      const prompt = text.replace("imagen:", "").trim();
+      const prompt = text.replace(/imagen:?/i, "").trim();
+
+      console.log("GENERANDO IMAGEN:", prompt);
 
       const img = await openai.images.generate({
         model: "gpt-image-1",
@@ -46,9 +44,7 @@ app.post("/telegram", async (req, res) => {
       });
 
       const imageBase64 = img.data[0].b64_json;
-      const imageBuffer = Buffer.from(imageBase64, "base64");
 
-      // enviar imagen a telegram
       await fetch(`${TELEGRAM_URL}/sendPhoto`, {
         method: "POST",
         headers: {
@@ -63,13 +59,11 @@ app.post("/telegram", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // =======================
     // 💬 CHAT NORMAL
-    // =======================
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        { role: "system", content: "Eres IA DARKNESS. También puedes crear imágenes si el usuario escribe 'imagen:'" },
+        { role: "system", content: "Eres IA DARKNESS. Puedes crear imágenes si el usuario lo pide." },
         { role: "user", content: text }
       ]
     });
@@ -88,7 +82,7 @@ app.post("/telegram", async (req, res) => {
     });
 
   } catch (error) {
-    console.log(error);
+    console.log("ERROR:", error);
   }
 
   res.sendStatus(200);
