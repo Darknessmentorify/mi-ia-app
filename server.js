@@ -1,34 +1,33 @@
-import express from "express";
-import fs from "fs";
+const express = require("express");
+const fs = require("fs");
 
 const app = express();
 app.use(express.json());
 
-const TOKEN = process.env.TELEGRAM_TOKEN;
+// 🔑 TOKEN DE TELEGRAM
+const TOKEN = process.env.TOKEN;
 const URL = `https://api.telegram.org/bot${TOKEN}`;
 
-// DB
-let db = {
-  users: {},
-  admin: { user: "Guillermo65", pass: "Guillermito00." }
-};
+// 📂 BASE DE DATOS SIMPLE
+const DB_FILE = "db.json";
 
-// estados temporales (login paso a paso)
-let states = {};
-
-// guardar db
-function saveDB() {
-  fs.writeFileSync("db.json", JSON.stringify(db, null, 2));
+function loadDB() {
+  if (!fs.existsSync(DB_FILE)) {
+    fs.writeFileSync(DB_FILE, JSON.stringify({ users: {}, products: {} }, null, 2));
+  }
+  return JSON.parse(fs.readFileSync(DB_FILE));
 }
 
-// cargar db
-if (fs.existsSync("db.json")) {
-  db = JSON.parse(fs.readFileSync("db.json"));
+function saveDB(data) {
+  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 }
 
-// enviar mensaje
+// 🧠 ESTADOS (login paso a paso)
+const states = {};
+
+// 📩 ENVIAR MENSAJE
 async function send(chatId, text, keyboard = null) {
-  await fetch(`${URL}/sendMessage`, {
+  return fetch(`${URL}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -39,130 +38,257 @@ async function send(chatId, text, keyboard = null) {
   });
 }
 
-// menú
+// 📋 MENÚS
 function menu() {
   return {
     keyboard: [
-      ["💰 Mi cuenta", "🛒 Comprar"],
+      ["🛒 Comprar", "💰 Mi cuenta"],
       ["⚙️ Admin"]
     ],
     resize_keyboard: true
   };
 }
 
-app.post("/telegram", async (req, res) => {
+function adminMenu() {
+  return {
+    keyboard: [
+      ["👤 Crear usuario", "💵 Agregar saldo"],
+      ["📦 Crear producto", "🔑 Agregar key"],
+      ["📋 Ver productos"],
+      ["⬅️ Volver"]
+    ],
+    resize_keyboard: true
+  };
+}
+
+// 🌐 WEBHOOK
+app.post("/", async (req, res) => {
   const msg = req.body.message;
   if (!msg) return res.sendStatus(200);
 
   const chatId = msg.chat.id;
   const text = msg.text;
 
-  // crear usuario si no existe
-  if (!db.users[chatId]) {
-    db.users[chatId] = {
-      plan: "gratis",
-      expire: 0,
-      saldo: 0,
-      admin: false
-    };
-  }
-
+  const db = loadDB();
   const user = db.users[chatId];
+  const state = states[chatId];
 
-  // 🔥 INICIO
+  // 🚀 START → LOGIN
   if (text === "/start") {
     states[chatId] = { step: "login_user" };
     return send(chatId, "👤 Ingresa tu usuario:");
   }
 
-  // 🔥 PASO 1: usuario
-  if (states[chatId]?.step === "login_user") {
-    states[chatId] = {
-      step: "login_pass",
-      username: text
-    };
+  // 🔐 LOGIN USUARIO
+  if (state?.step === "login_user") {
+    state.username = text;
+    state.step = "login_pass";
     return send(chatId, "🔑 Ingresa tu contraseña:");
   }
 
-  // 🔥 PASO 2: contraseña
-  if (states[chatId]?.step === "login_pass") {
-    const username = states[chatId].username;
+  // 🔐 LOGIN PASSWORD
+  if (state?.step === "login_pass") {
+    const username = state.username;
     const password = text;
 
-    // ADMIN LOGIN
-    if (
-      username === db.admin.user &&
-      password === db.admin.pass
-    ) {
-      user.admin = true;
-      states[chatId] = null;
-      saveDB();
-      return send(chatId, "✅ Admin logueado", menu());
+    // ADMIN
+    if (username === "Guillermo65" && password === "Guillermito00.") {
+      db.users[chatId] = {
+        username,
+        role: "admin",
+        saldo: 0
+      };
+      saveDB(db);
+      delete states[chatId];
+      return send(chatId, "✅ Admin logueado", adminMenu());
     }
 
-    // USUARIO NORMAL
+    // USUARIOS NORMALES
     const found = Object.values(db.users).find(
       u => u.username === username && u.password === password
     );
 
     if (found) {
-      states[chatId] = null;
-      return send(chatId, "✅ Login correcto", menu());
+      db.users[chatId] = found;
+      saveDB(db);
+      delete states[chatId];
+      return send(chatId, "✅ Login exitoso", menu());
     }
 
-    states[chatId] = null;
-    return send(chatId, "❌ Login incorrecto");
+    delete states[chatId];
+    return send(chatId, "❌ Credenciales incorrectas");
   }
 
-  // 🔥 CREAR USUARIO (admin)
-  if (text.startsWith("/crear")) {
-    if (!user.admin) return send(chatId, "❌ Solo admin");
+  // ❌ SI NO ESTÁ LOGUEADO
+  if (!user) {
+    return send(chatId, "⚠️ Debes hacer login con /start");
+  }
 
-    const [, username, password, plan, dias] = text.split(" ");
+  // ================= ADMIN =================
 
-    db.users[username] = {
-      username,
-      password,
-      plan,
-      expire: Date.now() + dias * 86400000,
+  if (text === "⚙️ Admin" && user.role === "admin") {
+    return send(chatId, "⚙️ Panel admin", adminMenu());
+  }
+
+  // 👤 CREAR USUARIO
+  if (text === "👤 Crear usuario" && user.role === "admin") {
+    states[chatId] = { step: "crear_user" };
+    return send(chatId, "👤 Username:");
+  }
+
+  if (state?.step === "crear_user") {
+    state.newUser = text;
+    state.step = "crear_pass";
+    return send(chatId, "🔑 Password:");
+  }
+
+  if (state?.step === "crear_pass") {
+    state.newPass = text;
+    state.step = "crear_plan";
+    return send(chatId, "📦 Plan (basico/pro/ilimitado):");
+  }
+
+  if (state?.step === "crear_plan") {
+    state.plan = text;
+    state.step = "crear_dias";
+    return send(chatId, "📅 Días:");
+  }
+
+  if (state?.step === "crear_dias") {
+    const id = Date.now();
+
+    db.users[id] = {
+      username: state.newUser,
+      password: state.newPass,
+      plan: state.plan,
+      dias: text,
       saldo: 0,
-      admin: false
+      role: "user"
     };
 
-    saveDB();
+    saveDB(db);
+    delete states[chatId];
+
     return send(chatId, "✅ Usuario creado");
   }
 
-  // MI CUENTA
+  // 💵 AGREGAR SALDO
+  if (text === "💵 Agregar saldo" && user.role === "admin") {
+    states[chatId] = { step: "saldo_user" };
+    return send(chatId, "👤 Usuario:");
+  }
+
+  if (state?.step === "saldo_user") {
+    state.target = text;
+    state.step = "saldo_amount";
+    return send(chatId, "💵 Monto:");
+  }
+
+  if (state?.step === "saldo_amount") {
+    const target = Object.values(db.users).find(u => u.username === state.target);
+    if (!target) {
+      delete states[chatId];
+      return send(chatId, "❌ Usuario no encontrado");
+    }
+
+    target.saldo += parseFloat(text);
+    saveDB(db);
+    delete states[chatId];
+
+    return send(chatId, "✅ Saldo agregado");
+  }
+
+  // 📦 CREAR PRODUCTO
+  if (text === "📦 Crear producto" && user.role === "admin") {
+    states[chatId] = { step: "prod_name" };
+    return send(chatId, "📦 Nombre del producto:");
+  }
+
+  if (state?.step === "prod_name") {
+    state.name = text;
+    state.step = "prod_price";
+    return send(chatId, "💰 Precio:");
+  }
+
+  if (state?.step === "prod_price") {
+    db.products[state.name] = {
+      price: parseFloat(text),
+      keys: []
+    };
+
+    saveDB(db);
+    delete states[chatId];
+
+    return send(chatId, "✅ Producto creado");
+  }
+
+  // 🔑 AGREGAR KEY
+  if (text === "🔑 Agregar key" && user.role === "admin") {
+    states[chatId] = { step: "key_prod" };
+    return send(chatId, "📦 Producto:");
+  }
+
+  if (state?.step === "key_prod") {
+    state.product = text;
+    state.step = "key_value";
+    return send(chatId, "🔑 Key:");
+  }
+
+  if (state?.step === "key_value") {
+    db.products[state.product].keys.push(text);
+    saveDB(db);
+    delete states[chatId];
+
+    return send(chatId, "✅ Key agregada");
+  }
+
+  // ================= USUARIO =================
+
   if (text === "💰 Mi cuenta") {
-    return send(
-      chatId,
-      `👤 Plan: ${user.plan}\n💰 Saldo: $${user.saldo}`
-    );
+    return send(chatId, `💰 Saldo: $${user.saldo}`);
   }
 
-  // COMPRAR
-  if (text === "🛒 Comprar") {
-    return send(chatId, "🛒 Planes:\n1 día $3\n7 días $7\n30 días $15");
+  if (text === "📋 Ver productos" || text === "🛒 Comprar") {
+    const buttons = Object.keys(db.products).map(p => [p]);
+    return send(chatId, "🛒 Productos:", {
+      keyboard: buttons,
+      resize_keyboard: true
+    });
   }
 
-  // ADMIN
-  if (text === "⚙️ Admin") {
-    if (!user.admin) return send(chatId, "❌ No eres admin");
+  // 🛒 COMPRAR
+  if (db.products[text]) {
+    const product = db.products[text];
 
-    return send(
-      chatId,
-      "⚙️ Panel Admin\nUsa:\n/crear usuario pass plan dias"
-    );
+    if (user.saldo < product.price) {
+      return send(chatId, "❌ Saldo insuficiente");
+    }
+
+    if (product.keys.length === 0) {
+      return send(chatId, "❌ Sin stock");
+    }
+
+    const key = product.keys.shift();
+    user.saldo -= product.price;
+
+    saveDB(db);
+
+    return send(chatId, `✅ Compra exitosa\n🔑 Key: ${key}`);
+  }
+
+  // ⬅️ VOLVER
+  if (text === "⬅️ Volver") {
+    return send(chatId, "🏠 Menú", menu());
   }
 
   res.sendStatus(200);
 });
 
-// test
+// 🚀 SERVIDOR
 app.get("/", (req, res) => {
-  res.send("BOT LOGIN ACTIVO 🔥");
+  res.send("🔥 FUNCIONANDO");
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Servidor ON"));
+app.listen(process.env.PORT || 3000, () => {
+  console.log("Server activo");
+});
