@@ -1,5 +1,6 @@
 import express from "express";
 import fetch from "node-fetch";
+import fs from "fs";
 
 const app = express();
 app.use(express.json());
@@ -7,16 +8,16 @@ app.use(express.json());
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const TELEGRAM_URL = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 
-// ===== DATOS =====
-const admins = {};
-const users = {};
-const estados = {};
-const productos = [
-  "Br Mods",
-  "Cuban Mods Store",
-  "Drip Client",
-  "Fluorite Iphone"
-];
+const DB_FILE = "./db.json";
+
+// ===== DB =====
+function loadDB() {
+  return JSON.parse(fs.readFileSync(DB_FILE));
+}
+
+function saveDB(data) {
+  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+}
 
 // ===== RESPUESTA =====
 async function reply(chatId, text, keyboard = null) {
@@ -33,18 +34,21 @@ async function reply(chatId, text, keyboard = null) {
   });
 }
 
-// ===== HOME =====
+// ===== ROOT =====
 app.get("/", (req, res) => {
-  res.send("BOT TIENDA funcionando 💰");
+  res.send("NEGOCIO ACTIVO 💰");
 });
 
 // ===== TELEGRAM =====
 app.post("/telegram", async (req, res) => {
+
   const message = req.body.message;
   if (!message) return res.sendStatus(200);
 
-  const chatId = message.chat.id;
+  const chatId = String(message.chat.id);
   const text = message.text || "";
+
+  let db = loadDB();
 
   try {
 
@@ -53,126 +57,196 @@ app.post("/telegram", async (req, res) => {
       const [, user, pass] = text.split(" ");
 
       if (user === "Guillermo65" && pass === "Guillermito00.") {
-        admins[chatId] = true;
-        await reply(chatId, "✅ Admin logueado");
+        db.admins[chatId] = true;
+        saveDB(db);
+        return reply(chatId, "✅ Admin activado");
       } else {
-        await reply(chatId, "❌ Error login");
+        return reply(chatId, "❌ Credenciales incorrectas");
       }
-      return res.sendStatus(200);
     }
 
     // ===== START =====
     if (text === "/start") {
-      if (!users[chatId]) {
-        users[chatId] = { saldo: 10 };
+
+      if (!db.users[chatId]) {
+        db.users[chatId] = { saldo: 0 };
+        saveDB(db);
       }
 
-      await reply(
-        chatId,
-        `🏠 Menú Principal\n💰 Saldo: $${users[chatId].saldo}`,
-        [
-          ["🛒 Comprar", "💰 Mi cuenta"],
-          ["⚙️ Admin"]
-        ]
-      );
-      return res.sendStatus(200);
-    }
-
-    // ===== COMPRAR =====
-    if (text === "🛒 Comprar") {
-      await reply(
-        chatId,
-        "Selecciona un plan:",
-        [
-          ["1 día $3"],
-          ["7 días $7"],
-          ["30 días $15"],
-          ["⬅️ Atrás"]
-        ]
-      );
-      return res.sendStatus(200);
+      return reply(chatId, "🏠 MENÚ PRINCIPAL", [
+        ["🛒 Comprar", "💰 Mi cuenta"],
+        ["⚙️ Admin"]
+      ]);
     }
 
     // ===== MI CUENTA =====
     if (text === "💰 Mi cuenta") {
-      await reply(
-        chatId,
-        `💰 Tu saldo es: $${users[chatId].saldo}`,
-        [["⬅️ Atrás"]]
+      const user = db.users[chatId];
+
+      return reply(chatId,
+        `💰 Saldo: $${user.saldo}`
       );
-      return res.sendStatus(200);
     }
 
     // ===== ADMIN PANEL =====
     if (text === "⚙️ Admin") {
-      if (!admins[chatId]) {
-        await reply(chatId, "❌ No eres admin");
-        return res.sendStatus(200);
+      if (!db.admins[chatId]) {
+        return reply(chatId, "❌ No eres admin");
       }
 
-      await reply(
-        chatId,
-        "🛠 Panel Admin",
-        [
-          ["📦 Productos"],
-          ["👥 Usuarios"],
-          ["⬅️ Atrás"]
-        ]
-      );
-      return res.sendStatus(200);
+      return reply(chatId, "🛠 PANEL ADMIN", [
+        ["👤 Crear usuario", "💰 Agregar saldo"],
+        ["📦 Crear producto", "🔑 Agregar key"],
+        ["📋 Ver productos"],
+        ["⬅️ Atrás"]
+      ]);
     }
 
-    // ===== PRODUCTOS =====
-    if (text === "📦 Productos") {
-      const botones = productos.map(p => [p]);
-      botones.push(["➕ Agregar producto"]);
+    // ===== CREAR USUARIO =====
+    if (text === "👤 Crear usuario") {
+      db.temp[chatId] = "crear_user";
+      saveDB(db);
+      return reply(chatId, "Formato:\nID SALDO\nEj: 123456789 10");
+    }
+
+    if (db.temp[chatId] === "crear_user") {
+      const [id, saldo] = text.split(" ");
+
+      db.users[id] = { saldo: Number(saldo) };
+
+      db.temp[chatId] = null;
+      saveDB(db);
+
+      return reply(chatId, "✅ Usuario creado");
+    }
+
+    // ===== AGREGAR SALDO =====
+    if (text === "💰 Agregar saldo") {
+      db.temp[chatId] = "saldo";
+      saveDB(db);
+      return reply(chatId, "Formato:\nID MONTO\nEj: 123456789 20");
+    }
+
+    if (db.temp[chatId] === "saldo") {
+      const [id, monto] = text.split(" ");
+
+      if (!db.users[id]) {
+        return reply(chatId, "❌ Usuario no existe");
+      }
+
+      db.users[id].saldo += Number(monto);
+
+      db.temp[chatId] = null;
+      saveDB(db);
+
+      return reply(chatId, "💰 Saldo agregado");
+    }
+
+    // ===== CREAR PRODUCTO =====
+    if (text === "📦 Crear producto") {
+      db.temp[chatId] = "producto";
+      saveDB(db);
+      return reply(chatId, "Formato:\nNombre Precio\nEj: Netflix 5");
+    }
+
+    if (db.temp[chatId] === "producto") {
+      const [nombre, precio] = text.split(" ");
+
+      db.productos[nombre] = {
+        precio: Number(precio),
+        keys: []
+      };
+
+      db.temp[chatId] = null;
+      saveDB(db);
+
+      return reply(chatId, "✅ Producto creado");
+    }
+
+    // ===== AGREGAR KEY =====
+    if (text === "🔑 Agregar key") {
+      db.temp[chatId] = "key";
+      saveDB(db);
+      return reply(chatId, "Formato:\nProducto KEY\nEj: Netflix ABC123");
+    }
+
+    if (db.temp[chatId] === "key") {
+      const [producto, key] = text.split(" ");
+
+      if (!db.productos[producto]) {
+        return reply(chatId, "❌ Producto no existe");
+      }
+
+      db.productos[producto].keys.push(key);
+
+      db.temp[chatId] = null;
+      saveDB(db);
+
+      return reply(chatId, "🔑 Key agregada");
+    }
+
+    // ===== VER PRODUCTOS =====
+    if (text === "📋 Ver productos") {
+      let lista = "📦 Productos:\n";
+
+      for (let p in db.productos) {
+        lista += `${p} - $${db.productos[p].precio} (${db.productos[p].keys.length} stock)\n`;
+      }
+
+      return reply(chatId, lista);
+    }
+
+    // ===== COMPRAR =====
+    if (text === "🛒 Comprar") {
+
+      let botones = [];
+
+      for (let p in db.productos) {
+        botones.push([p]);
+      }
+
       botones.push(["⬅️ Atrás"]);
 
-      await reply(chatId, "📦 Lista de productos:", botones);
-      return res.sendStatus(200);
+      return reply(chatId, "🛒 Selecciona producto:", botones);
     }
 
-    // ===== AGREGAR PRODUCTO =====
-    if (text === "➕ Agregar producto") {
-      estados[chatId] = "agregar_producto";
-      await reply(chatId, "Escribe el nombre del producto:");
-      return res.sendStatus(200);
-    }
+    if (db.productos[text]) {
+      const producto = db.productos[text];
+      const user = db.users[chatId];
 
-    if (estados[chatId] === "agregar_producto") {
-      productos.push(text);
-      estados[chatId] = null;
+      if (!user) {
+        return reply(chatId, "❌ Usa /start primero");
+      }
 
-      await reply(chatId, "✅ Producto agregado");
-      return res.sendStatus(200);
+      if (user.saldo < producto.precio) {
+        return reply(chatId, "❌ No tienes saldo");
+      }
+
+      if (producto.keys.length === 0) {
+        return reply(chatId, "❌ Sin stock");
+      }
+
+      const key = producto.keys.shift();
+      user.saldo -= producto.precio;
+
+      saveDB(db);
+
+      return reply(chatId, `✅ Compra exitosa\n🔑 Key: ${key}`);
     }
 
     // ===== ATRÁS =====
     if (text === "⬅️ Atrás") {
-      await reply(
-        chatId,
-        "🏠 Menú Principal",
-        [
-          ["🛒 Comprar", "💰 Mi cuenta"],
-          ["⚙️ Admin"]
-        ]
-      );
-      return res.sendStatus(200);
+      return reply(chatId, "🏠 MENÚ PRINCIPAL", [
+        ["🛒 Comprar", "💰 Mi cuenta"],
+        ["⚙️ Admin"]
+      ]);
     }
-
-    // ===== DEFAULT =====
-    await reply(chatId, "Usa el menú 👇");
-
-    return res.sendStatus(200);
 
   } catch (err) {
     console.log(err);
-    return res.sendStatus(200);
   }
+
+  res.sendStatus(200);
 });
 
-// ===== SERVER =====
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log("Servidor listo 🚀");
-});
+app.listen(3000, () => console.log("🔥 NEGOCIO FUNCIONANDO"));
