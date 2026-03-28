@@ -1,16 +1,16 @@
 const express = require("express");
 const fs = require("fs");
+const fetch = require("node-fetch");
 
 const app = express();
 app.use(express.json());
 
-// 🔑 TOKEN DE TELEGRAM
 const TOKEN = process.env.TOKEN;
 const URL = `https://api.telegram.org/bot${TOKEN}`;
 
-// 📂 BASE DE DATOS SIMPLE
 const DB_FILE = "db.json";
 
+// 📂 DB
 function loadDB() {
   if (!fs.existsSync(DB_FILE)) {
     fs.writeFileSync(DB_FILE, JSON.stringify({ users: {}, products: {} }, null, 2));
@@ -22,14 +22,14 @@ function saveDB(data) {
   fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 }
 
-// 🧠 ESTADOS (login paso a paso)
+// 🧠 estados login
 const states = {};
 
-// 📩 ENVIAR MENSAJE
+// 📩 enviar mensaje
 async function send(chatId, text, keyboard = null) {
   return fetch(`${URL}/sendMessage`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {"Content-Type": "application/json"},
     body: JSON.stringify({
       chat_id: chatId,
       text,
@@ -38,7 +38,7 @@ async function send(chatId, text, keyboard = null) {
   });
 }
 
-// 📋 MENÚS
+// 📋 menús
 function menu() {
   return {
     keyboard: [
@@ -61,7 +61,7 @@ function adminMenu() {
   };
 }
 
-// 🌐 WEBHOOK
+// 🌐 webhook
 app.post("/", async (req, res) => {
   const msg = req.body.message;
   if (!msg) return res.sendStatus(200);
@@ -73,20 +73,20 @@ app.post("/", async (req, res) => {
   const user = db.users[chatId];
   const state = states[chatId];
 
-  // 🚀 START → LOGIN
+  // 🚀 START
   if (text === "/start") {
     states[chatId] = { step: "login_user" };
     return send(chatId, "👤 Ingresa tu usuario:");
   }
 
-  // 🔐 LOGIN USUARIO
+  // LOGIN USER
   if (state?.step === "login_user") {
     state.username = text;
     state.step = "login_pass";
     return send(chatId, "🔑 Ingresa tu contraseña:");
   }
 
-  // 🔐 LOGIN PASSWORD
+  // LOGIN PASS
   if (state?.step === "login_pass") {
     const username = state.username;
     const password = text;
@@ -103,7 +103,7 @@ app.post("/", async (req, res) => {
       return send(chatId, "✅ Admin logueado", adminMenu());
     }
 
-    // USUARIOS NORMALES
+    // USERS
     const found = Object.values(db.users).find(
       u => u.username === username && u.password === password
     );
@@ -119,9 +119,8 @@ app.post("/", async (req, res) => {
     return send(chatId, "❌ Credenciales incorrectas");
   }
 
-  // ❌ SI NO ESTÁ LOGUEADO
   if (!user) {
-    return send(chatId, "⚠️ Debes hacer login con /start");
+    return send(chatId, "⚠️ Usa /start para iniciar sesión");
   }
 
   // ================= ADMIN =================
@@ -130,36 +129,36 @@ app.post("/", async (req, res) => {
     return send(chatId, "⚙️ Panel admin", adminMenu());
   }
 
-  // 👤 CREAR USUARIO
+  // CREAR USUARIO
   if (text === "👤 Crear usuario" && user.role === "admin") {
-    states[chatId] = { step: "crear_user" };
+    states[chatId] = { step: "new_user" };
     return send(chatId, "👤 Username:");
   }
 
-  if (state?.step === "crear_user") {
-    state.newUser = text;
-    state.step = "crear_pass";
+  if (state?.step === "new_user") {
+    state.username = text;
+    state.step = "new_pass";
     return send(chatId, "🔑 Password:");
   }
 
-  if (state?.step === "crear_pass") {
-    state.newPass = text;
-    state.step = "crear_plan";
-    return send(chatId, "📦 Plan (basico/pro/ilimitado):");
+  if (state?.step === "new_pass") {
+    state.password = text;
+    state.step = "new_plan";
+    return send(chatId, "📦 Plan:");
   }
 
-  if (state?.step === "crear_plan") {
+  if (state?.step === "new_plan") {
     state.plan = text;
-    state.step = "crear_dias";
+    state.step = "new_days";
     return send(chatId, "📅 Días:");
   }
 
-  if (state?.step === "crear_dias") {
+  if (state?.step === "new_days") {
     const id = Date.now();
 
     db.users[id] = {
-      username: state.newUser,
-      password: state.newPass,
+      username: state.username,
+      password: state.password,
       plan: state.plan,
       dias: text,
       saldo: 0,
@@ -172,7 +171,7 @@ app.post("/", async (req, res) => {
     return send(chatId, "✅ Usuario creado");
   }
 
-  // 💵 AGREGAR SALDO
+  // SALDO
   if (text === "💵 Agregar saldo" && user.role === "admin") {
     states[chatId] = { step: "saldo_user" };
     return send(chatId, "👤 Usuario:");
@@ -188,7 +187,7 @@ app.post("/", async (req, res) => {
     const target = Object.values(db.users).find(u => u.username === state.target);
     if (!target) {
       delete states[chatId];
-      return send(chatId, "❌ Usuario no encontrado");
+      return send(chatId, "❌ Usuario no existe");
     }
 
     target.saldo += parseFloat(text);
@@ -198,10 +197,10 @@ app.post("/", async (req, res) => {
     return send(chatId, "✅ Saldo agregado");
   }
 
-  // 📦 CREAR PRODUCTO
+  // PRODUCTOS
   if (text === "📦 Crear producto" && user.role === "admin") {
     states[chatId] = { step: "prod_name" };
-    return send(chatId, "📦 Nombre del producto:");
+    return send(chatId, "📦 Nombre:");
   }
 
   if (state?.step === "prod_name") {
@@ -211,18 +210,13 @@ app.post("/", async (req, res) => {
   }
 
   if (state?.step === "prod_price") {
-    db.products[state.name] = {
-      price: parseFloat(text),
-      keys: []
-    };
-
+    db.products[state.name] = { price: parseFloat(text), keys: [] };
     saveDB(db);
     delete states[chatId];
-
     return send(chatId, "✅ Producto creado");
   }
 
-  // 🔑 AGREGAR KEY
+  // KEYS
   if (text === "🔑 Agregar key" && user.role === "admin") {
     states[chatId] = { step: "key_prod" };
     return send(chatId, "📦 Producto:");
@@ -238,17 +232,15 @@ app.post("/", async (req, res) => {
     db.products[state.product].keys.push(text);
     saveDB(db);
     delete states[chatId];
-
     return send(chatId, "✅ Key agregada");
   }
 
-  // ================= USUARIO =================
-
+  // USUARIO
   if (text === "💰 Mi cuenta") {
     return send(chatId, `💰 Saldo: $${user.saldo}`);
   }
 
-  if (text === "📋 Ver productos" || text === "🛒 Comprar") {
+  if (text === "🛒 Comprar" || text === "📋 Ver productos") {
     const buttons = Object.keys(db.products).map(p => [p]);
     return send(chatId, "🛒 Productos:", {
       keyboard: buttons,
@@ -256,12 +248,11 @@ app.post("/", async (req, res) => {
     });
   }
 
-  // 🛒 COMPRAR
   if (db.products[text]) {
     const product = db.products[text];
 
     if (user.saldo < product.price) {
-      return send(chatId, "❌ Saldo insuficiente");
+      return send(chatId, "❌ Sin saldo");
     }
 
     if (product.keys.length === 0) {
@@ -273,18 +264,13 @@ app.post("/", async (req, res) => {
 
     saveDB(db);
 
-    return send(chatId, `✅ Compra exitosa\n🔑 Key: ${key}`);
-  }
-
-  // ⬅️ VOLVER
-  if (text === "⬅️ Volver") {
-    return send(chatId, "🏠 Menú", menu());
+    return send(chatId, `✅ Compra\n🔑 ${key}`);
   }
 
   res.sendStatus(200);
 });
 
-// 🚀 SERVIDOR
+// servidor
 app.get("/", (req, res) => {
   res.send("🔥 FUNCIONANDO");
 });
