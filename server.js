@@ -1,25 +1,24 @@
 import express from "express";
 import fetch from "node-fetch";
-import OpenAI from "openai";
 
 const app = express();
 app.use(express.json());
 
-// ===== CONFIG =====
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
-
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const TELEGRAM_URL = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 
-// ===== MEMORIA =====
-const chats = {};
+// ===== DATOS =====
 const admins = {};
 const users = {};
 const estados = {};
+const productos = [
+  "Br Mods",
+  "Cuban Mods Store",
+  "Drip Client",
+  "Fluorite Iphone"
+];
 
-// ===== FUNCION RESPUESTA =====
+// ===== RESPUESTA =====
 async function reply(chatId, text, keyboard = null) {
   await fetch(`${TELEGRAM_URL}/sendMessage`, {
     method: "POST",
@@ -36,7 +35,7 @@ async function reply(chatId, text, keyboard = null) {
 
 // ===== HOME =====
 app.get("/", (req, res) => {
-  res.send("IA DARKNESS funcionando 🚀");
+  res.send("BOT TIENDA funcionando 💰");
 });
 
 // ===== TELEGRAM =====
@@ -49,9 +48,7 @@ app.post("/telegram", async (req, res) => {
 
   try {
 
-    // =========================
-    // LOGIN ADMIN
-    // =========================
+    // ===== LOGIN ADMIN =====
     if (text.startsWith("/login")) {
       const [, user, pass] = text.split(" ");
 
@@ -59,29 +56,54 @@ app.post("/telegram", async (req, res) => {
         admins[chatId] = true;
         await reply(chatId, "✅ Admin logueado");
       } else {
-        await reply(chatId, "❌ Credenciales incorrectas");
+        await reply(chatId, "❌ Error login");
       }
       return res.sendStatus(200);
     }
 
-    // =========================
-    // START MENU
-    // =========================
+    // ===== START =====
     if (text === "/start") {
+      if (!users[chatId]) {
+        users[chatId] = { saldo: 10 };
+      }
+
       await reply(
         chatId,
-        "🏠 Menú Principal",
+        `🏠 Menú Principal\n💰 Saldo: $${users[chatId].saldo}`,
         [
-          ["🤖 IA", "💰 Mi cuenta"],
+          ["🛒 Comprar", "💰 Mi cuenta"],
           ["⚙️ Admin"]
         ]
       );
       return res.sendStatus(200);
     }
 
-    // =========================
-    // ADMIN PANEL
-    // =========================
+    // ===== COMPRAR =====
+    if (text === "🛒 Comprar") {
+      await reply(
+        chatId,
+        "Selecciona un plan:",
+        [
+          ["1 día $3"],
+          ["7 días $7"],
+          ["30 días $15"],
+          ["⬅️ Atrás"]
+        ]
+      );
+      return res.sendStatus(200);
+    }
+
+    // ===== MI CUENTA =====
+    if (text === "💰 Mi cuenta") {
+      await reply(
+        chatId,
+        `💰 Tu saldo es: $${users[chatId].saldo}`,
+        [["⬅️ Atrás"]]
+      );
+      return res.sendStatus(200);
+    }
+
+    // ===== ADMIN PANEL =====
     if (text === "⚙️ Admin") {
       if (!admins[chatId]) {
         await reply(chatId, "❌ No eres admin");
@@ -92,84 +114,54 @@ app.post("/telegram", async (req, res) => {
         chatId,
         "🛠 Panel Admin",
         [
-          ["👥 Crear usuario"],
+          ["📦 Productos"],
+          ["👥 Usuarios"],
           ["⬅️ Atrás"]
         ]
       );
       return res.sendStatus(200);
     }
 
-    // =========================
-    // CREAR USUARIO (BOTON)
-    // =========================
-    if (text === "👥 Crear usuario") {
-      if (!admins[chatId]) {
-        await reply(chatId, "❌ No eres admin");
-        return res.sendStatus(200);
-      }
+    // ===== PRODUCTOS =====
+    if (text === "📦 Productos") {
+      const botones = productos.map(p => [p]);
+      botones.push(["➕ Agregar producto"]);
+      botones.push(["⬅️ Atrás"]);
 
-      estados[chatId] = "crear_usuario";
-      await reply(chatId, "Escribe:\nID PLAN DIAS\nEjemplo:\n123456789 pro 30");
+      await reply(chatId, "📦 Lista de productos:", botones);
       return res.sendStatus(200);
     }
 
-    // =========================
-    // PROCESO CREAR USUARIO
-    // =========================
-    if (estados[chatId] === "crear_usuario") {
-      const [id, plan, dias] = text.split(" ");
+    // ===== AGREGAR PRODUCTO =====
+    if (text === "➕ Agregar producto") {
+      estados[chatId] = "agregar_producto";
+      await reply(chatId, "Escribe el nombre del producto:");
+      return res.sendStatus(200);
+    }
 
-      users[id] = {
-        plan,
-        expires: Date.now() + dias * 86400000
-      };
-
+    if (estados[chatId] === "agregar_producto") {
+      productos.push(text);
       estados[chatId] = null;
 
-      await reply(chatId, `✅ Usuario creado:
-ID: ${id}
-Plan: ${plan}
-Días: ${dias}`);
-
+      await reply(chatId, "✅ Producto agregado");
       return res.sendStatus(200);
     }
 
-    // =========================
-    // BOTON IA
-    // =========================
-    if (text === "🤖 IA") {
-      await reply(chatId, "Escribe lo que quieras preguntar...");
+    // ===== ATRÁS =====
+    if (text === "⬅️ Atrás") {
+      await reply(
+        chatId,
+        "🏠 Menú Principal",
+        [
+          ["🛒 Comprar", "💰 Mi cuenta"],
+          ["⚙️ Admin"]
+        ]
+      );
       return res.sendStatus(200);
     }
 
-    // =========================
-    // IA RESPUESTA
-    // =========================
-    if (!chats[chatId]) {
-      chats[chatId] = [
-        { role: "system", content: "Eres una IA llamada IA DARKNESS" }
-      ];
-    }
-
-    chats[chatId].push({
-      role: "user",
-      content: text
-    });
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: chats[chatId]
-    });
-
-    const respuesta =
-      completion.choices[0].message.content || "Error";
-
-    chats[chatId].push({
-      role: "assistant",
-      content: respuesta
-    });
-
-    await reply(chatId, respuesta);
+    // ===== DEFAULT =====
+    await reply(chatId, "Usa el menú 👇");
 
     return res.sendStatus(200);
 
@@ -182,5 +174,5 @@ Días: ${dias}`);
 // ===== SERVER =====
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log("Servidor corriendo 🚀");
+  console.log("Servidor listo 🚀");
 });
