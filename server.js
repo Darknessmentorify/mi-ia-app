@@ -1,6 +1,7 @@
 import express from "express";
 import fetch from "node-fetch";
 import OpenAI from "openai";
+import FormData from "form-data";
 
 const app = express();
 app.use(express.json());
@@ -13,10 +14,14 @@ const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const TELEGRAM_URL = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 
 // =======================
+// TEST
+// =======================
 app.get("/", (req, res) => {
   res.send("IA DARKNESS funcionando 🚀");
 });
 
+// =======================
+// TELEGRAM
 // =======================
 app.post("/telegram", async (req, res) => {
 
@@ -24,42 +29,62 @@ app.post("/telegram", async (req, res) => {
   if (!message) return res.sendStatus(200);
 
   const chatId = message.chat.id;
-  const text = message.text || "";
-
-  console.log("MENSAJE:", text);
+  const text = (message.text || "").toLowerCase().trim();
 
   try {
 
-    // 🔥 DETECCIÓN MEJORADA
-    if (text.toLowerCase().includes("imagen")) {
+    console.log("MENSAJE:", text);
 
-      const prompt = text.replace(/imagen:?/i, "").trim();
+    // =======================
+    // 🖼️ IMÁGENES
+    // =======================
+    if (
+      text.startsWith("imagen") ||
+      text.includes("crear imagen") ||
+      text.includes("haz una imagen") ||
+      text.includes("genera imagen")
+    ) {
+
+      let prompt = text
+        .replace("imagen:", "")
+        .replace("imagen", "")
+        .replace("crear imagen", "")
+        .replace("haz una imagen", "")
+        .replace("genera imagen", "")
+        .trim();
+
+      if (!prompt) {
+        prompt = "una imagen futurista épica";
+      }
 
       console.log("GENERANDO IMAGEN:", prompt);
 
       const img = await openai.images.generate({
         model: "gpt-image-1",
         prompt: prompt,
-        size: "1024x1024"
+        size: "512x512" // más barato 💰
       });
 
       const imageBase64 = img.data[0].b64_json;
+      const imageBuffer = Buffer.from(imageBase64, "base64");
+
+      const form = new FormData();
+      form.append("chat_id", chatId);
+      form.append("photo", imageBuffer, {
+        filename: "imagen.png"
+      });
 
       await fetch(`${TELEGRAM_URL}/sendPhoto`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          chat_id: chatId,
-          photo: `data:image/png;base64,${imageBase64}`
-        })
+        body: form
       });
 
       return res.sendStatus(200);
     }
 
+    // =======================
     // 💬 CHAT NORMAL
+    // =======================
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
