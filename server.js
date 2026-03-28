@@ -3,12 +3,14 @@ import cors from "cors";
 import OpenAI from "openai";
 import multer from "multer";
 import fs from "fs";
+import fetch from "node-fetch";
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
+// carpeta uploads
 if (!fs.existsSync("uploads")) {
   fs.mkdirSync("uploads");
 }
@@ -19,8 +21,12 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+// 🔥 AQUÍ VA TU TOKEN (EJEMPLO)
+const TELEGRAM_TOKEN = "8608868969:AAGmst9r2-7maQfVCIAxrGPJJKVxLyiQjkc";
+const TELEGRAM_URL = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
+
 // =======================
-// 🧠 CHAT
+// 🧠 CHAT WEB
 // =======================
 app.post("/text", async (req, res) => {
   try {
@@ -29,10 +35,7 @@ app.post("/text", async (req, res) => {
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        {
-          role: "system",
-          content: "Eres IA DARKNESS, respondes claro y recuerdas todo."
-        },
+        { role: "system", content: "Eres IA DARKNESS" },
         ...(messages || [])
       ]
     });
@@ -43,58 +46,54 @@ app.post("/text", async (req, res) => {
 
   } catch (error) {
     console.log(error);
-    res.json({ respuesta: "Error en IA 💀" });
+    res.json({ respuesta: "Error 💀" });
   }
 });
 
 // =======================
-// 🎨 IMAGEN
+// 🤖 TELEGRAM BOT
 // =======================
-app.post("/image", async (req, res) => {
-  try {
-    const { prompt } = req.body;
+app.post("/telegram", async (req, res) => {
 
-    const result = await openai.images.generate({
-      model: "gpt-image-1",
-      prompt,
-      size: "512x512"
+  const message = req.body.message;
+  if (!message) return res.sendStatus(200);
+
+  const chatId = message.chat.id;
+  const text = message.text;
+
+  try {
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: "Eres IA DARKNESS" },
+        { role: "user", content: text }
+      ]
     });
 
-    res.json({
-      image: `data:image/png;base64,${result.data[0].b64_json}`
+    const respuesta = completion.choices?.[0]?.message?.content || "Sin respuesta";
+
+    await fetch(`${TELEGRAM_URL}/sendMessage`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: respuesta
+      })
     });
 
   } catch (error) {
     console.log(error);
-    res.status(500).json({ error: "Error imagen" });
   }
+
+  res.sendStatus(200);
 });
 
 // =======================
-app.post("/edit-image", upload.single("image"), async (req, res) => {
-  try {
-    const prompt = req.body.prompt;
-
-    const result = await openai.images.generate({
-      model: "gpt-image-1",
-      prompt,
-      size: "512x512"
-    });
-
-    res.json({
-      image: `data:image/png;base64,${result.data[0].b64_json}`
-    });
-
-    if (req.file) fs.unlinkSync(req.file.path);
-
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({ error: "Error editando" });
-  }
-});
-
 app.get("/test", (req, res) => {
-  res.send("OK 🚀");
+  res.send("IA DARKNESS funcionando 🚀");
 });
 
 app.listen(3000, () => {
