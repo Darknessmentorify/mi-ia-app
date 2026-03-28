@@ -25,24 +25,52 @@ app.post("/telegram", async (req, res) => {
   try {
 
     const message = req.body.message;
-
     if (!message) return res.sendStatus(200);
 
     const chatId = message.chat.id;
     const text = message.text || "";
 
-    // comandos básicos
+    // START
     if (text === "/start") {
-      await sendMessage(chatId, "👋 Hola, soy IA DARKNESS\nEscríbeme lo que quieras 💀");
+      await send(chatId, "🚀 IA DARKNESS funcionando 💀");
       return res.sendStatus(200);
     }
 
-    if (text === "/help") {
-      await sendMessage(chatId, "Comandos:\n/start\n/help\nSolo escribe y te respondo 😈");
+    // IMÁGENES
+    if (text.startsWith("/imagen")) {
+
+      const prompt = text.replace("/imagen", "").trim();
+
+      if (!prompt) {
+        await send(chatId, "Escribe algo después de /imagen");
+        return res.sendStatus(200);
+      }
+
+      await send(chatId, "🎨 Creando imagen...");
+
+      const result = await openai.images.generate({
+        model: "gpt-image-1",
+        prompt: prompt,
+        size: "1024x1024"
+      });
+
+      const image = result.data[0].b64_json;
+
+      await fetch(`${TELEGRAM_URL}/sendPhoto`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          chat_id: chatId,
+          photo: `data:image/png;base64,${image}`
+        })
+      });
+
       return res.sendStatus(200);
     }
 
-    // IA
+    // CHAT NORMAL
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -53,7 +81,7 @@ app.post("/telegram", async (req, res) => {
 
     const respuesta = completion.choices?.[0]?.message?.content || "Sin respuesta";
 
-    await sendMessage(chatId, respuesta);
+    await send(chatId, respuesta);
 
     res.sendStatus(200);
 
@@ -64,9 +92,9 @@ app.post("/telegram", async (req, res) => {
 });
 
 // =======================
-// 📩 FUNCION ENVIAR MSG
+// 📩 ENVIAR MENSAJE
 // =======================
-async function sendMessage(chatId, text) {
+async function send(chatId, text) {
   await fetch(`${TELEGRAM_URL}/sendMessage`, {
     method: "POST",
     headers: {
@@ -83,7 +111,7 @@ async function sendMessage(chatId, text) {
 // 🟢 TEST
 // =======================
 app.get("/", (req, res) => {
-  res.send("BOT TELEGRAM ACTIVO 🚀");
+  res.send("IA DARKNESS funcionando 🚀");
 });
 
 const PORT = process.env.PORT || 3000;
